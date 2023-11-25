@@ -1,7 +1,6 @@
 # math-problems-site
 [NOT FINISHED] This project is a site for training in solving primitive problems in mathematics.
 
-
 [Click here to see the project in action](https://drive.google.com/file/d/1OyQgPUWnMwl-aMsy5-s2EtGu-LuPXHqm/view?usp=sharing)
 
 ## Implemented features
@@ -11,10 +10,10 @@
 * View statistics and history of answers to tasks.
 
 🧑‍🏫 Teacher:
-* Creating classes and inviting students to them;
-* Creating homework for the class;
+* Create classes and invite students to them;
+* Create homework for the class;
 * View student progress;
-   
+
 👨‍💻 Administrator:
 * View actions performed on the site.
 
