@@ -1,0 +1,238 @@
+import React, {useState, useEffect} from 'react';
+import axios from 'axios';
+import dayjs from 'dayjs';
+import {NavLink, useParams, useLocation, useNavigate} from "react-router-dom";
+import {DatePicker} from 'antd';
+import Chart from 'react-apexcharts';
+import styles from '../styles/Stats.module.css';
+import nav_styles from '../styles/Navigation.module.css';
+
+export default function Stats(){
+    const instance = axios.create({
+        baseURL: 'http://localhost:8000',
+        withCredentials: true
+    });
+
+    var {id} = useParams();
+
+    const navigate = useNavigate();
+
+    const query = new URLSearchParams(useLocation().search);
+
+    const [displayData, setDisplayData] = useState({
+        display: false,
+        viewer_role: '',
+        first_name: '',
+        last_name: ''
+    });
+
+    const [series, setSeries] = useState({
+        correct: [0, 0, 0, 0],
+        not_correct: [0, 0, 0, 0]
+    });
+
+    const [filter, setFilter] = useState({
+        start_datetime: '',
+        end_datetime: ''
+    });
+
+    const [homeworks, setHomeworks] = useState(<></>);
+
+    useEffect(() => {
+        const access = async () => {
+            const user = await instance.get('/whoami');
+            if (!user.data)
+                return;
+            if (user.data._id == id){
+                setDisplayData({...displayData, display: true, viewer_role: "pupil"});
+                return;
+            };
+            const result = await instance.get(`/access-to-user?requested=${id}`);
+            if (result.data.status == 200)
+                setDisplayData({...displayData, display: true,
+                                                viewer_role: result.data.requesterRole,
+                                                first_name: result.data.user.first_name,
+                                                last_name: result.data.user.last_name});
+        };
+        access();
+        var filterNew = {...filter};
+        filterNew.start_datetime = query.get('start_datetime') == null ? '' : query.get('start_datetime');
+        filterNew.end_datetime = query.get('end_datetime') == null ? '' : query.get('end_datetime');
+        setFilter(filterNew);
+    }, []);
+
+    useEffect(() => {
+        if (displayData.display){
+            query.set('start_datetime', filter.start_datetime);
+            query.set('end_datetime', filter.end_datetime);
+            navigate('?' + query.toString());
+            instance.get(`/personal/graph-stats?userId=${id}&${query.toString()}`).then(res => {
+                if (res.data.status == 200)
+                    setSeries(res.data.series);
+            });
+        }
+    }, [displayData, filter]);
+
+    const getHometasks = async() => {
+        const homeworks_response = await instance.get(`/homeworks?userId=${id}`);
+        console.log(homeworks_response);
+        if (homeworks_response.data.status == 200){
+            var homeworks_list = homeworks_response.data.homeworks;
+            let i = 0;
+            const result = 
+                <div className={styles.homeworks_content}>
+                    <div style={{textAlign: 'center', marginBottom: '10px'}}>Прогресс домашнего задания</div>
+                    <div className={styles.homeworks}>
+                        {homeworks_list.map(homework => (
+                        <div key={i++} className={styles.homework}
+                                        style={(homework.status == 'completed') ?
+                                                {border: '2px dashed #3FB017'} :
+                                                ((homework.status == 'failed') ?
+                                                    {border: '2px dashed #FF4D4F'} :
+                                                    {border: '2px dashed rgba(227, 114, 34, 0.8)'})}>
+                            <div className={styles.title}>
+                                <div>Домашнее задание</div>
+                                <div>От {`${homework.created_timestamp.substring(0, 10)} ${homework.created_timestamp.substring(11, 19)}`}</div>
+                                <div>До {`${homework.deadline_timestamp.substring(0, 10)} ${homework.deadline_timestamp.substring(11, 19)}`}</div>
+                            </div>
+                            <ol>
+                                {homework.tasks.map(task =>
+                                    <li key={i++}>{task.categories.join(" и ") + " - " + task.progress + "/" + task.count}</li>
+                                )}
+                            </ol>
+                        </div>
+                        ))}
+                    </div>
+                </div>
+            setHomeworks(result)
+        }
+    }
+
+    useEffect(() => {
+        if (displayData.display)
+            getHometasks();
+    }, [displayData])
+
+    let state = { 
+        series: [{
+            name: 'Верно',
+            data: series.correct
+        }, {
+            name: 'Неверно',
+            data: series.not_correct
+        }],
+        options: {
+            chart: {
+                type: 'bar',
+                stacked: true,
+                background: '#F5F0F6',
+                fontFamily: 'Roboto',
+                toolbar: {
+                    show: false,
+                },
+            },
+            colors: ['#01E396', '#FF4560'],
+            grid: {
+                show: false
+            },
+            dataLabels: {
+                style: {
+                    fontSize: '18px',
+                }
+            },
+            xaxis: {
+                categories: ['Сложение', 'Вычитание', 'Умножение', 'Деление'],
+                labels: {
+                    style: {
+                        fontSize: '14px'
+                    }
+                }
+            },
+            yaxis: {
+                labels: {
+                    style: {
+                        fontSize: '16px'
+                    }
+                }
+            },
+            plotOptions: {
+                bar: {
+                    horizontal: true,
+                    barHeight: '90%',
+                    dataLabels: {
+                        total: {
+                            enabled: true,
+                            offsetX: 0,
+                            style: {
+                                fontSize: '18px'
+                            }
+                        }
+                    }
+                },
+            },
+            stroke: {
+                width: 1,
+                colors: ['#fff']
+            },
+            tooltip: {
+                y: {formatter: (seriesName) => seriesName}
+            },
+            fill: {
+                opacity: 1
+            },
+            legend: {
+                position: 'top',
+                horizontalAlign: 'center',
+                offsetY: 20,
+                fontFamily: 'Roboto',
+                fontSize: 18
+            }
+        },
+    };
+
+    const getSubNavigation = () => {
+        var activeStyle = {
+            color: "#07889B"
+        };
+        return <div className={nav_styles.navbar}>
+                   <div className={nav_styles.center}>
+                       <div>{`${displayData.first_name} ${displayData.last_name}`}:</div>
+                       <NavLink
+                           to={"/stats/" + id}
+                           style={({ isActive }) =>
+                           isActive ? activeStyle : undefined
+                           }>Статистика</NavLink>
+                       <NavLink
+                           to={"/user_history/" + id}
+                           style={({ isActive }) =>
+                           isActive ? activeStyle : undefined
+                           }>История</NavLink>
+                   </div>
+               </div>
+    };
+
+    return (
+        <>
+            {
+                displayData.display ? <>
+                    {(displayData.viewer_role !== "pupil") ? getSubNavigation() : <div style={{marginTop: "50px"}}></div>}
+                    <div className={styles.main}>
+                        <div className={styles.graph}>
+                            <Chart options={state.options} series={state.series} type="bar" width={750} height={300}/>
+                            <DatePicker.RangePicker showToday={true} allowEmpty={[true, true]} onChange={(date, dateString) => {
+                                        var datetimeFilter = {...filter};
+                                        datetimeFilter.start_datetime = dateString[0];
+                                        datetimeFilter.end_datetime = dateString[1];
+                                        setFilter(datetimeFilter)
+                                    }
+                                }
+                                defaultValue={[filter.start_datetime == '' ? '' : dayjs(filter.start_datetime, 'YYYY-MM-DD'),
+                                               filter.end_datetime == '' ? '' : dayjs(filter.end_datetime, 'YYYY-MM-DD')]}/>
+                        </div>
+                        {homeworks}
+                    </div>
+                </> : <div>You can't access to this information</div>
+            }
+        </>
+    )
+}
